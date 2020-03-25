@@ -1,6 +1,6 @@
 import geopandas
 import matplotlib.pyplot as plt
-i
+
 ###############################################################################
 # Let's use the NYC borough boundary data that is available in geopandas
 # datasets. Plotting this gives the following result:
