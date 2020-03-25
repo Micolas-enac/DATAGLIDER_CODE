@@ -5,7 +5,6 @@ import geopandas
 import numpy as np
 import data_analysis
 
-"Nicolas rajoute un commentaire que jules modifie"
 
 def make_list_of_tracks(repertoire, list_of_names_txt):
     list_filename = "IGC_FILES/" + repertoire + "/" + list_of_names_txt
@@ -104,22 +103,39 @@ def sort_by_date(flight_list):
     return flight_per_date
 
 
+def get_alti_used_day(list_of_flights):
+    thermal_list = get_thermal_list(list_of_flights)
+    return np.mean([thermal.exit_fix.gnss_alt for thermal in thermal_list])
+
+
+def get_distance_day(list_of_flights):
+    thermal_list = get_thermal_list(list_of_flights)
+    neighbors = data_analysis.find_k_neighbors(thermal_list, 4)
+    neighbors_list = list()
+    for neighbor in neighbors:
+        neighbors_list += neighbor
+    distances = [neigh[1] for neigh in neighbors_list]
+    return np.mean(distances)
+
+
 def main():
     repertoires = ["IGC_SO_18"]
     for rep in repertoires:
         repertoire, list_of_names_txt = rep, "list_files_igc_1.txt"
         list_of_flights = get_list_of_flight(repertoire, list_of_names_txt)
         dict_flight = sort_by_date(list_of_flights)
-        for key, cont in dict_flight:
-            print(key, len(cont))
-        # thermal_list = get_thermal_list(list_of_flights)
-        # print(thermal_list)
-        # neighbors = data_analysis.find_k_neighbors(thermal_list, 5)
-        # neighbors_list = list()
-        # for neighbor in neighbors:
-        #    neighbors_list += neighbor
-        # distances = [neigh[1] for neigh in neighbors_list]
-        # fig, ax = plt.subplots()
+        distances, altimax = list(), list()
+        for cont in dict_flight.values():
+            distances.append(get_distance_day(cont))
+            altimax.append(get_alti_used_day(cont))
+
+        fig, ax = plt.subplots()
+        ax.scatter(altimax, distances, label='correlation nz:zm')
+        ax.legend()
+        ax.set_xlabel("Zm")
+        ax.set_ylabel('Nz')
+        plt.show()
+
         # plot_over_map(thermal_list, title=rep, ax=ax)
         # plot_thermal_position_2(thermal_list, title="Graphics", ax=ax)
         # plt.show()
