@@ -28,8 +28,8 @@ from matplotlib.collections import PatchCollection
 
 # Latin HyperCube sampling of 2D space
 # ------------------------------------
-N = 300 # number of spot
-l = 10
+N = 100 # number of spot
+l = 10 # square side length (km)
 
 
 def gen_spots():
