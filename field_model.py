@@ -113,7 +113,7 @@ class Glider:
             y.append(pos.y)
             alti.append(alt)
         plt.plot(x, y, dashes=[3, 2], color='grey')  # plots the path of the glider
-        plt.scatter(x, y, marker='x', c=alti, cmap=plt.get_cmap('jet'))  # scatters the path colored with altitude
+        plt.scatter(x, y, marker='x', color='red')  # scatters the path colored with altitude
         return ""  # avoid error
 
     def in_lift(self, field):
@@ -138,7 +138,6 @@ class Glider:
         Update of the gliding position
         :param time_increment: time spent since last position
         :param phi: angle between the x-axis and the path that follows the glider (in degrees, betwwen 0 an 90)
-        :param field: field of evolution of the glider
         :return: a new position and ltitude depending on the case
         """
         x = self.position.x + 0.001 * (self.speed / 3.6) * time_increment * np.cos(deg_to_rad(phi))
@@ -199,11 +198,21 @@ class Scene:
 
 
 def main():
-    scene = Scene(500, 500, radius=0.5, height=1600, density=0.1, ldr=30, speed=98, altitude=1250, increment=20)
-    print(scene)
-    m_f_p_l = scene.run()
-    print(scene)
-    print(m_f_p_l)
+    n = 10
+    for _ in range(n):
+        density_list = [0.05 * i for i in range(20)]
+        mean_fp_list = list()
+        for density in density_list:
+            scene = Scene(75, 75, radius=0.33, height=1600, density=density, ldr=30,
+                          speed=98, altitude=1250, increment=20)
+            m_f_p_l = scene.run()
+            mean_fp_list.append(np.log(np.mean(m_f_p_l)))
+        plt.plot(density_list, mean_fp_list, linewidth=0.5)
+    plt.grid(True)
+    plt.xlabel('Lift Density $(km^{-2})$')
+    plt.ylabel('Mean Free Path $(km)$')
+    plt.annotate('Lift radius : $330$ $m$ \nScene dimensions : $75x75$ $km$', (40, 0.5))
+    plt.show()
 
 
 if __name__ == '__main__':
