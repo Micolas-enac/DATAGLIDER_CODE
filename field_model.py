@@ -51,6 +51,10 @@ class Point:
     def distance(self, other):
         return ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
 
+    def update(self, other):
+        self.x = other.x
+        self.y = other.y
+
 
 class Field:
     """
@@ -75,7 +79,7 @@ class Field:
         ax.set_aspect(1)  # aspect ratio of the drawing
         for point in self.lift:
             ax.add_artist(plt.Circle((point.x, point.y), self.radius, alpha=0.35))  # draw the circle of the lift
-            ax.scatter(point.x, point.y, marker='2', color='black') # draw the center point
+            ax.scatter(point.x, point.y, marker='2', color='black')  # draw the center point
         return ""  # just to avoid error from python
 
     def generate(self, density):
@@ -118,20 +122,18 @@ class Glider:
         :param field:
         :return: the lift which was entered or None if no lift has been crossed yet
         """
-        for l in field.lift:
-            print(l)
-            if self.position.distance(l) < field.radius:
-                return l
-            else:
-                pass
-        return None
+        in_lift_in = list()
+        for n in range(len(field.lift)):
+            if self.position.distance(field.lift[n]) < field.radius:
+                in_lift_in.append(field.lift[n])
+        return in_lift_in[0] if len(in_lift_in) > 0 else Point(-1, -1)
 
     def in_scene(self, field):
-        x_cond = self.position.x > field.dim_y
-        y_cond = self.position.y > field.dim_y
-        return not(x_cond or y_cond)
+        x_cond = self.position.x < field.dim_x
+        y_cond = self.position.y < field.dim_y
+        return x_cond or y_cond
 
-    def update_position(self, time_increment, phi, field):
+    def update_position(self, time_increment, phi):
         """
         Update of the gliding position
         :param time_increment: time spent since last position
@@ -141,15 +143,7 @@ class Glider:
         """
         x = self.position.x + 0.001 * (self.speed / 3.6) * time_increment * np.cos(deg_to_rad(phi))
         y = self.position.y + 0.001 * (self.speed / 3.6) * time_increment * np.sin(deg_to_rad(phi))
-        self.position = Point(x, y)
-        if self.in_lift(field) is not None:  # if a lift is crossed,
-            # update the position in order to find the intersection with the lift
-            position_temp = intersect_solver(self.in_lift(field), self.pos_historic[-1][0], self.position, field.radius)
-            self.position = position_temp
-        else:  # else, continue to follow a direct path descending
-            # alti = self.altitude - (self.speed/3.6) * time_increment / self.ldr
-            # self.altitude = alti  # if alti > 0 else 0
-            return
+        self.position.update(Point(x, y))
         self.pos_historic.append((self.position, self.altitude))
 
 
@@ -167,6 +161,8 @@ class Scene:
     def __repr__(self):
         print(self.field)  # plot the field
         print(self.glider)  # plot the glider path at time of print
+        plt.xlim(-2, self.field.dim_x + 2)
+        plt.ylim(-2, self.field.dim_y + 2)
         plt.show()
         return ""  # avoid errors
 
@@ -176,46 +172,38 @@ class Scene:
         :return: scene object (self) updated
         """
         self.time += self.increment
-        self.glider.update_position(self.increment, 30, self.field)
+        self.glider.update_position(self.increment, 45)
 
     def run(self):
         """
         main function : runs the simulation
         :return: time flown and mean free path
         """
-        while True:  # while the glider is in the air
-            # if the glider is not in a lift and still in the field
+        cross_lift_list = list()
 
-            if self.glider.in_lift(self.field) is None:
-                if self.glider.in_scene(self.field):
-                    # if not self.glider.not_in_scene(self.field):
-                    self.update()  # update the scene
-                else:
-                    break
-                # else:
-                # else, the glider has flown all over the field
-                #    break
-            # if the glider crosses a lift
+        while self.glider.in_scene(self.field):  # while the glider is in the air
+            # if the glider is not in a lift
+            cross_lift_list.append(self.glider.in_lift(self.field))
+            if self.glider.in_lift(self.field) == Point(-1, -1):
+                self.update()  # update the scene
             else:
-                break
-        # give final interest parameters if the glider has flown until ground
-        temp = self.glider.altitude if self.glider.altitude > 0 else 0
-        self.glider.altitude = temp
-        print("TIME FLOWN=", self.time, 'sec')
-        print("LPR =", self.glider.position.distance(Point(0, 0)), 'km')
-        return self.glider.position.distance(Point(0, 0))
+                new_x = self.glider.position.x + 2 * self.field.radius
+                new_y = self.glider.position.y + 2 * self.field.radius
+                self.glider.position.update(Point(new_x, new_y))
+
+        crossed_lifts = [Point(0, 0)] + [point for point in cross_lift_list if point != Point(-1, -1)]
+        m_f_p_l = list()
+        for i in range(1, len(crossed_lifts)):
+            m_f_p_l.append(crossed_lifts[i].distance(crossed_lifts[i-1]))
+        return m_f_p_l
 
 
 def main():
-    n = 1
-    free_mean_path = list()
-    for _ in range(n):
-        scene = Scene(10, 10, radius=0.3, height=1600, density=0.5, ldr=30, speed=98, altitude=1250, increment=20)
-        print(scene)
-        print(scene.glider.in_scene(scene.field))
-        free_mean_path.append(scene.run())
-        print(scene)
-    print(free_mean_path)
+    scene = Scene(500, 500, radius=0.5, height=1600, density=0.1, ldr=30, speed=98, altitude=1250, increment=20)
+    print(scene)
+    m_f_p_l = scene.run()
+    print(scene)
+    print(m_f_p_l)
 
 
 if __name__ == '__main__':

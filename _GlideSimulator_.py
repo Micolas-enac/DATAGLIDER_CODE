@@ -45,9 +45,9 @@ def gen_spots():
     ncat = N
     x = []
     y = []
-    for i in range(0,N):
-        ix = np.random.randint(0,ncat) # choose a random cell
-        iy = np.random.randint(0,ncat)
+    for i in range(0, N):
+        ix = np.random.randint(0, ncat)  # choose a random cell
+        iy = np.random.randint(0, ncat)
         try:
             xran = xcat[ix]
             yran = ycat[iy]
@@ -66,6 +66,7 @@ def gen_spots():
 
     return list(zip(x,y))
 
+
 # Glider simulation
 y0 = 5
 R = 0.1
@@ -73,6 +74,8 @@ R2 = R ** 2
 xmax = 2
 print("lambda = %0.1f" % (1 / (N/l**2 * 2 * R)))
 print("E(X) = %0.1f" % np.exp(xmax * N/l**2 * 2 * R))
+
+
 def simu(spots):
     """ Run a flight simulation in a given thermal fields in x direction.
     :param spots: the (x,y) position of the thermals
@@ -96,7 +99,7 @@ def simu(spots):
     return points
 
 x = []
-for k in range(0,100):
+for k in range(0, 100):
     spots = gen_spots()
     points = simu(spots)
     x.append(points[-1])
@@ -105,14 +108,14 @@ for k in range(0,100):
 fig,ax = plt.subplots()
 x,y = zip(*spots)
 ax.scatter(x,y)
-ax.plot(points,[y0]*len(points),':+k')
+ax.plot(points, [y0]*len(points), ':+k')
 ax.set_aspect('equal')
 patches = []
 for s in spots:
-    p = Circle(s,radius=R,fc='k',ec='k')
+    p = Circle(s, radius=R, fc='k', ec='k')
     patches.append(p)
 
-pc = PatchCollection(patches,alpha=0.5)
+pc = PatchCollection(patches, alpha=0.5)
 ax.add_collection(pc)
 
 plt.show()
