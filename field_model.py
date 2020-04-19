@@ -198,20 +198,36 @@ class Scene:
 
 
 def main():
-    n = 10
-    for _ in range(n):
-        density_list = [0.05 * i for i in range(20)]
+    n = 5
+    RADIUS = 0.500
+    dict_item = dict()
+    density_list = [0.05 * i for i in range(1, 20)]
+    for i in range(n):
+        print(['XXX'*int(i+1)], i+1, '/', n)
+
         mean_fp_list = list()
         for density in density_list:
-            scene = Scene(75, 75, radius=0.33, height=1600, density=density, ldr=30,
+            scene = Scene(75, 75, radius=RADIUS, height=1600, density=density, ldr=30,
                           speed=98, altitude=1250, increment=20)
             m_f_p_l = scene.run()
-            mean_fp_list.append(np.log(np.mean(m_f_p_l)))
-        plt.plot(density_list, mean_fp_list, linewidth=0.5)
+            temp_add = 1 / np.mean(m_f_p_l) if m_f_p_l !=[] else 0
+            if dict_item.get(density):
+                dict_item[density] += temp_add
+            else:
+                dict_item[density] = temp_add
+            mean_fp_list.append(temp_add)
+        plt.plot(density_list, mean_fp_list, marker='+', linewidth=0.67)
+        plt.scatter(density_list, mean_fp_list, marker='+', linewidth=0.9, color='black')
+    values_to_fit = [value / n for value in dict_item.values()]
+    fitting = np.polyfit(density_list, values_to_fit, 1)
+    fitted = [fitting[0] * density + fitting[1] for density in density_list]
+    plt.plot(density_list, fitted, linewidth='0.8', color='red')
     plt.grid(True)
-    plt.xlabel('Lift Density $(km^{-2})$')
+    plt.xlabel('Inverted Lift Density $(km^{2})$')
     plt.ylabel('Mean Free Path $(km)$')
-    plt.annotate('Lift radius : $330$ $m$ \nScene dimensions : $75x75$ $km$', (40, 0.5))
+    bbox_props = dict(fc="w", ec="0.5", alpha=1)
+    plt.text(0.28, 0.4, 'Lift radius : $500$ $m$ \nScene dimensions : $75x75$ $km$ \n $\lambda=' +
+             '{:.3f}'.format(fitting[0])+'$', ha="center", va="center", size=9, bbox=bbox_props)
     plt.show()
 
 
