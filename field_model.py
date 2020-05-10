@@ -99,12 +99,19 @@ class Glider:
     creates a simple object of gliding performance
     """
 
-    def __init__(self, ldr, speed, altitude):
+    def __init__(self, ldr, speed, altitude, miniSinkRate=0.6, miniSinkRateSpeed = 75):
         self.ldr = ldr  # lift to drag ratio
         self.speed = speed  # speed of glide
         self.altitude = altitude  # altitude parameter (is function of time)
         self.position = Point(0, 0)  # initial position
         self.pos_historic = [(self.position, self.altitude)]  # historic of positions and alt. through the simulation
+        self.miniSinkRate = 0.6 #m/s
+        self.miniSinkRateSpeed = 75 #km/h
+        self.bestLdrSpeed = speed
+        self.mass = 400 #kg (pour un astir)
+        self.potentialEnergy = self.mass*9.81*self.altitude
+        self.kineticEnergy = 0.5*self.mass*(self.speed/3.6)**2
+        self.mechanicalEnergy = self.potentialEnergy + self.kineticEnergy
 
     def __repr__(self):
         x, y, alti = list(), list(), list()
@@ -138,24 +145,25 @@ class Glider:
         Update of the gliding position
         :param time_increment: time spent since last position
         :param phi: angle between the x-axis and the path that follows the glider (in degrees, betwwen 0 an 90)
-        :return: a new position and ltitude depending on the case
+        :return: a new position and altitude depending on the case
         """
         x = self.position.x + 0.001 * (self.speed / 3.6) * time_increment * np.cos(deg_to_rad(phi))
         y = self.position.y + 0.001 * (self.speed / 3.6) * time_increment * np.sin(deg_to_rad(phi))
         self.position.update(Point(x, y))
-        self.pos_historic.append((self.position, self.altitude))
+        self.pos_historic.append((Point(x,y), self.altitude))
 
 
 class Scene:
     """
     create a Scene object to make the simulation work
     """
-    def __init__(self, dim_x, dim_y, radius, height, density, ldr, speed, altitude, increment=10):
+    def __init__(self, dim_x, dim_y, radius, height, density, ldr, speed, altitude, increment=10, thermalVz = 2):
         self.field = Field(dim_x, dim_y, radius, height)  # creates an empty field
         self.field.generate(density)  # fills it with lifts
         self.glider = Glider(ldr, speed, altitude)  # places a glider
         self.time = 0  # initialize time to 0 (in seconds)
         self.increment = increment  # increment of time between to steps
+        self.thermalVz = thermalVz
 
     def __repr__(self):
         print(self.field)  # plot the field
@@ -167,11 +175,57 @@ class Scene:
 
     def update(self):
         """
-        creates an iteration of the scene : updates time and position of the glider
+        creates an iteration of the scene : updates time and position of the glider if it is out of the lift, using
+        its speed and the glide corresponding to this speed.
         :return: scene object (self) updated
         """
         self.time += self.increment
+
+
+
+        speed = self.glider.speed/3.6
+        miniSinkRateSpeed = self.glider.miniSinkRateSpeed/3.6
+        bestLdrSpeed = self.glider.bestLdrSpeed/3.6
+        mass = self.glider.mass
+
+        if speed == bestLdrSpeed:#The glider has left the lift and already reached best glide speed
+            delta_z = speed*self.increment/self.glider.ldr
+            self.glider.altitude -= delta_z
+            self.glider.potentialEnergy -= mass*9.81*delta_z
+            self.glider.mechanicalEnergy = self.glider.potentialEnergy + self.glider.kineticEnergy
+
+        else:#The glider goes out from the glide and converts a bit of altitude into speed to reach best glide speed
+            deltaEc = 0.5*mass*(bestLdrSpeed**2-miniSinkRateSpeed**2)
+            delta_z = deltaEc/(mass*9.81)+speed*self.increment/self.glider.ldr #The glider loses altitude due to accelerating and  gliding (approximated to the best one over the period, which is optimistic)
+            self.glider.altitude -= delta_z
+            self.glider.kineticEnergy += deltaEc
+            self.glider.potentialEnergy -= deltaEc
+            self.glider.speed = 3.6*bestLdrSpeed
+
+
         self.glider.update_position(self.increment, 45)
+
+
+    def update_in_lift(self):
+        """Updates the position of the glider when it is in a lift, using the minimal sink rate and speed."""
+        time_increment = self.increment/5 #for more accuracy in the lift
+        self.time += time_increment
+
+
+        if self.glider.speed == self.glider.miniSinkRateSpeed : #if the glider already has its best sink rate speed
+            delta_z = (self.thermalVz-self.glider.miniSinkRate)*time_increment
+            self.glider.altitude += delta_z #alt increment due to the lift
+            self.glider.potentialEnergy += self.glider.mass*9.81*delta_z
+            self.glider.mechanicalEnergy = self.glider.potentialEnergy + self.glider.kineticEnergy
+
+        else : #entering the lift, converting speed into altitude at constant energy (in fact there would be gains due to the lift, and losses due to the maneuver, trim change...)
+            delta_z = 0.5*((self.glider.bestLdrSpeed/3.6)**2-(self.glider.miniSinkRateSpeed/3.6)**2)/9.81
+            self.glider.altitude += delta_z
+            self.glider.potentialEnergy += self.glider.mass*9.81*delta_z
+            self.glider.kineticEnergy -= self.glider.mass*9.81*delta_z
+            self.glider.speed = self.glider.miniSinkRateSpeed
+
+        self.glider.update_position(time_increment, 45)
 
     def run(self):
         """
@@ -186,9 +240,7 @@ class Scene:
             if self.glider.in_lift(self.field) == Point(-1, -1):
                 self.update()  # update the scene
             else:
-                new_x = self.glider.position.x + 2 * self.field.radius
-                new_y = self.glider.position.y + 2 * self.field.radius
-                self.glider.position.update(Point(new_x, new_y))
+                self.update_in_lift()
 
         crossed_lifts = [Point(0, 0)] + [point for point in cross_lift_list if point != Point(-1, -1)]
         m_f_p_l = list()
@@ -216,8 +268,10 @@ def main():
             else:
                 dict_item[density] = temp_add
             mean_fp_list.append(temp_add)
+
         plt.plot(density_list, mean_fp_list, marker='+', linewidth=0.67)
         plt.scatter(density_list, mean_fp_list, marker='+', linewidth=0.9, color='black')
+
     values_to_fit = [value / n for value in dict_item.values()]
     fitting = np.polyfit(density_list, values_to_fit, 1)
     fitted = [fitting[0] * density + fitting[1] for density in density_list]
