@@ -99,7 +99,7 @@ class Glider:
     creates a simple object of gliding performance
     """
 
-    def __init__(self, ldr, speed, altitude, miniSinkRate=0.6, miniSinkRateSpeed = 75):
+    def __init__(self, ldr, speed, altitude, miniSinkRate=0.6, miniSinkRateSpeed = 75, strategy = False):
         self.ldr = ldr  # lift to drag ratio
         self.speed = speed  # speed of glide
         self.altitude = altitude  # altitude parameter (is function of time)
@@ -112,6 +112,9 @@ class Glider:
         self.potentialEnergy = self.mass*9.81*self.altitude
         self.kineticEnergy = 0.5*self.mass*(self.speed/3.6)**2
         self.mechanicalEnergy = self.potentialEnergy + self.kineticEnergy
+        #self.energyData = [(self.potentialEnergy, self.kineticEnergy, self.mechanicalEnergy)]
+        self.strategy = False #Use True if you consider that the conditions allow the glider pilot to somehow locate the lifts. False otherwise.
+        self.angle = 45 #degrees
 
     def __repr__(self):
         x, y, alti = list(), list(), list()
@@ -135,6 +138,35 @@ class Glider:
                 in_lift_in.append(field.lift[n])
         return in_lift_in[0] if len(in_lift_in) > 0 else Point(-1, -1)
 
+    def find_thermal_cone(self, field):
+        '''Updates the angle of the glider's trajectory, from the current position, to go to the thermal nearest to
+        trajectory in a 30 degrees cone, within 5 km range. Returns 45 degrees if nothing found.'''
+        thermals_list = field.lift
+        list_of_useful =[]
+        for thermal in thermals_list:
+            delta_x = thermal.x-self.position.x
+            delta_y = thermal.y-self.position.y
+            if delta_x >0 and delta_y >0 : #and -1 < delta_y/delta_x<1:
+                angle = np.arccos(delta_x/((delta_x**2+delta_y**2)**0.5))
+                if deg_to_rad(30) <= angle <= deg_to_rad(60) and self.position.distance(thermal) <= 10:
+                    list_of_useful.append((thermal, self.position.distance(thermal), angle))
+
+        #min_delta_angle = deg_to_rad(15)
+        min_dist = 10
+        new_angle = deg_to_rad(45)
+        if len(list_of_useful)>0:
+            for th_dist_angle in list_of_useful:
+                #delta_angle = abs(deg_to_rad(45)-th_ang[1])
+                if th_dist_angle[1] < min_dist:
+                    new_angle = th_dist_angle[2]
+                    min_dist = th_dist_angle[1]
+        self.angle = new_angle*180/np.pi
+        #print(self.angle, "Direction change")
+        return None
+
+
+
+
     def in_scene(self, field):
         x_cond = self.position.x < field.dim_x
         y_cond = self.position.y < field.dim_y
@@ -151,6 +183,8 @@ class Glider:
         y = self.position.y + 0.001 * (self.speed / 3.6) * time_increment * np.sin(deg_to_rad(phi))
         self.position.update(Point(x, y))
         self.pos_historic.append((Point(x,y), self.altitude))
+        #As the change of position comes last in the algorithm we also can store the energy.
+
 
 
 class Scene:
@@ -162,6 +196,8 @@ class Scene:
         self.field.generate(density)  # fills it with lifts
         self.glider = Glider(ldr, speed, altitude)  # places a glider
         self.time = 0  # initialize time to 0 (in seconds)
+        self.time_data = [self.time]
+        self.energyData = [(self.glider.potentialEnergy, self.glider.kineticEnergy, self.glider.mechanicalEnergy)]
         self.increment = increment  # increment of time between to steps
         self.thermalVz = thermalVz
 
@@ -201,9 +237,14 @@ class Scene:
             self.glider.kineticEnergy += deltaEc
             self.glider.potentialEnergy -= deltaEc
             self.glider.speed = 3.6*bestLdrSpeed
+            if self.glider.strategy :
+                self.glider.find_thermal_cone(self.field)
 
 
-        self.glider.update_position(self.increment, 45)
+
+        self.glider.update_position(self.increment, self.glider.angle)
+        self.time_data.append(self.time)
+        self.energyData.append((self.glider.potentialEnergy, self.glider.kineticEnergy, self.glider.mechanicalEnergy))
 
 
     def update_in_lift(self):
@@ -225,7 +266,9 @@ class Scene:
             self.glider.kineticEnergy -= self.glider.mass*9.81*delta_z
             self.glider.speed = self.glider.miniSinkRateSpeed
 
-        self.glider.update_position(time_increment, 45)
+        self.glider.update_position(time_increment, self.glider.angle)
+        self.time_data.append(self.time)
+        self.energyData.append((self.glider.potentialEnergy, self.glider.kineticEnergy, self.glider.mechanicalEnergy))
 
     def run(self):
         """
@@ -233,6 +276,7 @@ class Scene:
         :return: time flown and mean free path
         """
         cross_lift_list = list()
+        self.glider.find_thermal_cone(self.field)
 
         while self.glider.in_scene(self.field):  # while the glider is in the air
             # if the glider is not in a lift
